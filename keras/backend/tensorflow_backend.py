@@ -957,6 +957,18 @@ def cast(x, dtype):
     return tf.cast(x, dtype)
 
 
+def cast_like(x, like):
+    return None if x is None else cast(x, dtype(like))
+
+
+def get_precise_dtype(x):
+    return 'float32' if dtype(x) == 'float16' else dtype(x)
+
+
+def cast_to_precise(x):
+    return cast(x, get_precise_dtype(x))
+
+
 # UPDATES OPS
 
 
@@ -1748,11 +1760,9 @@ def _regular_normalize_batch_in_training(x, gamma, beta,
     # Returns
         A tuple length of 3, `(normalized_tensor, mean, variance)`.
     """
-    mean, var = tf.nn.moments(x, reduction_axes,
+    mean, var = tf.nn.moments(cast_to_precise(x), reduction_axes,
                               None, None, False)
-    normed = tf.nn.batch_normalization(x, mean, var,
-                                       beta, gamma,
-                                       epsilon)
+    normed = batch_normalization(x, mean, var, beta, gamma, epsilon)
     return normed, mean, var
 
 
@@ -1771,7 +1781,7 @@ def _broadcast_normalize_batch_in_training(x, gamma, beta,
     # Returns
         A tuple length of 3, `(normalized_tensor, mean, variance)`.
     """
-    mean, var = tf.nn.moments(x, reduction_axes,
+    mean, var = tf.nn.moments(cast_to_precise(x), reduction_axes,
                               None, None, False)
     target_shape = []
     for axis in range(ndim(x)):
@@ -1792,7 +1802,7 @@ def _broadcast_normalize_batch_in_training(x, gamma, beta,
     else:
         broadcast_beta = tf.reshape(beta, target_shape)
 
-    normed = tf.nn.batch_normalization(
+    normed = batch_normalization(
         x,
         broadcast_mean,
         broadcast_var,
@@ -1826,11 +1836,11 @@ def _fused_normalize_batch_in_training(x, gamma, beta, reduction_axes,
 
     if gamma is None:
         gamma = tf.constant(1.0,
-                            dtype=x.dtype,
+                            dtype=get_precise_dtype(x),
                             shape=[x.get_shape()[normalization_axis]])
     if beta is None:
         beta = tf.constant(0.0,
-                           dtype=x.dtype,
+                           dtype=get_precise_dtype(x),
                            shape=[x.get_shape()[normalization_axis]])
 
     return tf.nn.fused_batch_norm(

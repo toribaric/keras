@@ -187,7 +187,7 @@ class BatchNormalization(Layer):
         if K.backend() != 'cntk':
             sample_size = K.prod([K.shape(inputs)[axis]
                                   for axis in reduction_axes])
-            sample_size = K.cast(sample_size, dtype=K.dtype(inputs))
+            sample_size = K.cast_like(sample_size, variance)
 
             # sample variance - unbiased estimator of population variance
             variance *= sample_size / (sample_size - (1.0 + self.epsilon))

@@ -246,8 +246,10 @@ class Layer(object):
         initializer = initializers.get(initializer)
         if dtype is None:
             dtype = K.floatx()
-        weight = K.variable(initializer(shape),
-                            dtype=dtype,
+        initialized_weights = initializer(shape, dtype=dtype)
+        weights_dtype = K.dtype(initialized_weights)
+        weight = K.variable(initialized_weights,
+                            dtype=weights_dtype,
                             name=name,
                             constraint=constraint)
         if regularizer is not None:

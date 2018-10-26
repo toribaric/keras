@@ -81,12 +81,35 @@ class Optimizer(object):
         self.updates = []
         self.weights = []
 
+    def cast_like(self, like):
+        def do_cast(x):
+            return K.cast_like(x, like)
+
+        return do_cast
+
     @interfaces.legacy_get_updates_support
     def get_updates(self, loss, params):
         raise NotImplementedError
 
+    def is_lower_precision(self, params):
+        for p in params:
+            if K.dtype(p) == 'float16':
+                return True
+
+        return False
+
+    def compute_gradients(self, loss, params):
+        if self.is_lower_precision(params):
+            grads = K.gradients(loss * K.loss_scale(), params)
+            grads = [grad / K.loss_scale() for grad in grads]
+            # cast to full precision in order for L2 norm clipping
+            # to work, and for better numerical stability
+            return [K.cast(grad, 'float32') for grad in grads]
+
+        return K.gradients(loss, params)
+
     def get_gradients(self, loss, params):
-        grads = K.gradients(loss, params)
+        grads = self.compute_gradients(loss, params)
         if None in grads:
             raise ValueError('An operation has `None` for gradient. '
                              'Please make sure that all of your ops have a '
@@ -193,13 +216,14 @@ class SGD(Optimizer):
         moments = [K.zeros(shape) for shape in shapes]
         self.weights = [self.iterations] + moments
         for p, g, m in zip(params, grads, moments):
+            cast_like_p = self.cast_like(p)
             v = self.momentum * m - lr * g  # velocity
             self.updates.append(K.update(m, v))
 
             if self.nesterov:
-                new_p = p + self.momentum * v - lr * g
+                new_p = p + cast_like_p(self.momentum * v - lr * g)
             else:
-                new_p = p + v
+                new_p = p + cast_like_p(v)
 
             # Apply constraints.
             if getattr(p, 'constraint', None) is not None:
@@ -264,10 +288,13 @@ class RMSprop(Optimizer):
                                                       K.dtype(self.decay))))
 
         for p, g, a in zip(params, grads, accumulators):
+            cast_like_p = self.cast_like(p)
             # update accumulator
-            new_a = self.rho * a + (1. - self.rho) * K.square(g)
+            new_a = cast_like_p(self.rho) * a + cast_like_p(1. - self.rho) * \
+                cast_like_p(K.square(g))
             self.updates.append(K.update(a, new_a))
-            new_p = p - lr * g / (K.sqrt(new_a) + self.epsilon)
+            new_p = p - cast_like_p(lr) * cast_like_p(g) / \
+                (K.sqrt(new_a) + self.epsilon)
 
             # Apply constraints.
             if getattr(p, 'constraint', None) is not None:

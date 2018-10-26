@@ -8,6 +8,7 @@ import numpy as np
 _FLOATX = 'float32'
 _EPSILON = 1e-7
 _IMAGE_DATA_FORMAT = 'channels_last'
+_LOSS_SCALE = 128
 
 
 def epsilon():
@@ -219,3 +220,7 @@ def image_dim_ordering():
         return 'th'
     else:
         return 'tf'
+
+
+def loss_scale():
+    return _LOSS_SCALE
