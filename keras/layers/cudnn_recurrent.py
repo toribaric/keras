@@ -443,9 +443,13 @@ class CuDNNLSTM(_CuDNNRNN):
 
         if self.unit_forget_bias:
             def bias_initializer(shape, *args, **kwargs):
+                initialized_bias = self.bias_initializer(
+                    (self.units * 5,), *args, **kwargs)
+                bias_dtype = K.dtype(initialized_bias)
                 return K.concatenate([
-                    self.bias_initializer((self.units * 5,), *args, **kwargs),
-                    initializers.Ones()((self.units,), *args, **kwargs),
+                    initialized_bias,
+                    K.cast(initializers.Ones()(
+                        (self.units,), *args, **kwargs), bias_dtype),
                     self.bias_initializer((self.units * 2,), *args, **kwargs),
                 ])
         else:
