@@ -98,10 +98,16 @@ class Optimizer(object):
 
         return False
 
+    def is_tensor(self, obj):
+        return obj.__class__.__name__ == 'Tensor'
+
     def compute_gradients(self, loss, params):
+        def restore_grad(grad):
+            return grad / K.loss_scale() if self.is_tensor(grad) else grad
+
         if self.is_lower_precision(params):
             grads = K.gradients(loss * K.loss_scale(), params)
-            grads = [grad / K.loss_scale() for grad in grads]
+            grads = [restore_grad(grad) for grad in grads]
             # cast to full precision in order for L2 norm clipping
             # to work, and for better numerical stability
             return [K.cast(grad, 'float32') for grad in grads]
@@ -516,18 +522,22 @@ class Adam(Optimizer):
         if self.amsgrad:
             vhats = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
         else:
-            vhats = [K.zeros(1) for _ in params]
+            vhats = [K.zeros(1, dtype=K.dtype(p)) for p in params]
         self.weights = [self.iterations] + ms + vs + vhats
 
         for p, g, m, v, vhat in zip(params, grads, ms, vs, vhats):
-            m_t = (self.beta_1 * m) + (1. - self.beta_1) * g
-            v_t = (self.beta_2 * v) + (1. - self.beta_2) * K.square(g)
+            cast_like_p = self.cast_like(p)
+            c_beta_1 = cast_like_p(self.beta_1)
+            c_beta_2 = cast_like_p(self.beta_2)
+            c_lr_t = cast_like_p(lr_t)
+            m_t = (c_beta_1 * m) + (1. - c_beta_1) * cast_like_p(g)
+            v_t = (c_beta_2 * v) + (1. - c_beta_2) * K.square(cast_like_p(g))
             if self.amsgrad:
                 vhat_t = K.maximum(vhat, v_t)
-                p_t = p - lr_t * m_t / (K.sqrt(vhat_t) + self.epsilon)
+                p_t = p - c_lr_t * m_t / (K.sqrt(vhat_t) + self.epsilon)
                 self.updates.append(K.update(vhat, vhat_t))
             else:
-                p_t = p - lr_t * m_t / (K.sqrt(v_t) + self.epsilon)
+                p_t = p - c_lr_t * m_t / (K.sqrt(v_t) + self.epsilon)
 
             self.updates.append(K.update(m, m_t))
             self.updates.append(K.update(v, v_t))
