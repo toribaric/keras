@@ -247,7 +247,8 @@ class Layer(object):
         if dtype is None:
             dtype = K.floatx()
         initialized_weights = initializer(shape, dtype=dtype)
-        weights_dtype = K.dtype(initialized_weights)
+        weights_dtype = K.dtype(initialized_weights) if K.is_tensor(
+            initialized_weights) else dtype
         weight = K.variable(initialized_weights,
                             dtype=weights_dtype,
                             name=name,

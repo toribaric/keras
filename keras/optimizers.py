@@ -517,27 +517,26 @@ class Adam(Optimizer):
         lr_t = lr * (K.sqrt(1. - K.pow(self.beta_2, t)) /
                      (1. - K.pow(self.beta_1, t)))
 
-        ms = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
-        vs = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
+        ms = [K.zeros(K.int_shape(p)) for p in params]
+        vs = [K.zeros(K.int_shape(p)) for p in params]
         if self.amsgrad:
-            vhats = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
+            vhats = [K.zeros(K.int_shape(p)) for p in params]
         else:
-            vhats = [K.zeros(1, dtype=K.dtype(p)) for p in params]
+            vhats = [K.zeros(1) for p in params]
         self.weights = [self.iterations] + ms + vs + vhats
 
         for p, g, m, v, vhat in zip(params, grads, ms, vs, vhats):
             cast_like_p = self.cast_like(p)
-            c_beta_1 = cast_like_p(self.beta_1)
-            c_beta_2 = cast_like_p(self.beta_2)
-            c_lr_t = cast_like_p(lr_t)
-            m_t = (c_beta_1 * m) + (1. - c_beta_1) * cast_like_p(g)
-            v_t = (c_beta_2 * v) + (1. - c_beta_2) * K.square(cast_like_p(g))
+            m_t = (self.beta_1 * m) + (1. - self.beta_1) * g
+            v_t = (self.beta_2 * v) + (1. - self.beta_2) * K.square(g)
             if self.amsgrad:
                 vhat_t = K.maximum(vhat, v_t)
-                p_t = p - c_lr_t * m_t / (K.sqrt(vhat_t) + self.epsilon)
+                p_t = p - cast_like_p(lr_t) * cast_like_p(m_t) / \
+                    cast_like_p(K.sqrt(vhat_t) + self.epsilon)
                 self.updates.append(K.update(vhat, vhat_t))
             else:
-                p_t = p - c_lr_t * m_t / (K.sqrt(v_t) + self.epsilon)
+                p_t = p - cast_like_p(lr_t) * cast_like_p(m_t) / \
+                    cast_like_p(K.sqrt(v_t) + self.epsilon)
 
             self.updates.append(K.update(m, m_t))
             self.updates.append(K.update(v, v_t))
